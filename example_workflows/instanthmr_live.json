@@ -571,7 +571,7 @@
     "full",
     0,
     24,
-    "off",
+    "absolute",
     -1
    ],
    "widgets_values_named": {
@@ -586,7 +586,7 @@
     "format.mesh_style.face_style": "full",
     "format.bone_smooth_window": 0,
     "fps": 24,
-    "camera_translation": "off",
+    "camera_translation": "absolute",
     "track_index": -1
    },
    "color": "#322",

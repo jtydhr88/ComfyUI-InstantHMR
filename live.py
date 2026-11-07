@@ -20,6 +20,7 @@ import comfy.sd
 import folder_paths
 import comfy.utils
 from comfy.ldm.rt_detr.rtdetr_v4 import COCO_CLASSES
+from server import PromptServer
 
 from .humanoid import BONES, HumanoidRig, VMCSender, mat_to_quat
 from .nodes import FOCAL_DIAG, RECORD_DIR, InstantHMRLoader, crop_batch, recording_files
@@ -208,6 +209,9 @@ def register_routes(routes):
                     error = None
                     if not room.settings["model"] or not room.settings["detector"]:
                         error = "Pick an InstantHMR model and an RT-DETR detector in the InstantHMR Live Capture node"
+                    elif PromptServer.instance.prompt_queue.get_current_queue_volatile()[0]:
+                        # A running workflow may load or move the same models; running both at once crashes the process.
+                        error = "Paused while a workflow runs"
                     else:
                         jpeg = msg.data
                         received = time.monotonic()

@@ -57,7 +57,7 @@ Put your computer's LAN address in `subjectAltName`, open ComfyUI at `https://<a
 | `instanthmr_medium.safetensors` | HGNetV2-B4 | 40.0 | CC BY-NC 4.0 |
 | `instanthmr_medium_commercial.safetensors` | HGNetV2-B4 | 50.7 | Apache-2.0 |
 
-Put them in `models/detection`. Each file holds the network and the MHR body rig it is trained on, so no other model is needed. The CC BY-NC weights are for non-commercial use; `medium_commercial` is trained on commercially usable images only.
+Download them from [Hugging Face](https://huggingface.co/jtydhr88/ComfyUI-InstantHMR) and put them in `models/detection`. Each file holds the network and the MHR body rig it is trained on, so no other model is needed. The CC BY-NC weights are for non-commercial use; `medium_commercial` is trained on commercially usable images only.
 
 ### Converting the released ONNX files
 

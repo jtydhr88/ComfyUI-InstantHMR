@@ -57,7 +57,7 @@ python main.py --listen 0.0.0.0 --tls-keyfile key.pem --tls-certfile cert.pem
 | `instanthmr_medium.safetensors` | HGNetV2-B4 | 40.0 | CC BY-NC 4.0 |
 | `instanthmr_medium_commercial.safetensors` | HGNetV2-B4 | 50.7 | Apache-2.0 |
 
-放到 `models/detection`。每个文件都包含网络和它训练时用的 MHR 人体骨架，不需要其他模型。CC BY-NC 的权重仅限非商业使用；`medium_commercial` 只用可商用图片训练。
+从 [Hugging Face](https://huggingface.co/jtydhr88/ComfyUI-InstantHMR) 下载，放到 `models/detection`。每个文件都包含网络和它训练时用的 MHR 人体骨架，不需要其他模型。CC BY-NC 的权重仅限非商业使用；`medium_commercial` 只用可商用图片训练。
 
 ### 转换官方 ONNX 文件
 

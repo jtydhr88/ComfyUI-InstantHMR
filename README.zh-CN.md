@@ -28,14 +28,14 @@
 
 ![实时采集](docs/live_capture.jpg)
 
-`InstantHMR Live Capture` 对摄像头画面实时运行 RT-DETR 和 InstantHMR：左边是叠加了 2D 骨架的画面，右边是 3D 人体（可拖动旋转）。在节点里选好 InstantHMR 模型、RT-DETR 检测器和摄像头，按 `Start`。
+`InstantHMR Live Capture` 对摄像头画面实时运行 RT-DETR 和 InstantHMR：左边是叠加了 2D 骨架的画面，右边是 3D 人体（可拖动旋转）。在节点里选好 InstantHMR 模型 `model`、RT-DETR 检测器 `detector` 和摄像头 `camera`，按 `Start`。这些设置随工作流保存。
 
-- **This device**：使用打开 ComfyUI 的这台设备的摄像头。
-- **Phone / other device**：节点显示二维码，同一局域网的手机扫码后，手机页面推送摄像头画面并显示骨架，节点显示 3D 视图。
-- `● Rec` 把收到的画面录到 `input/instanthmr_live/`。新片段会自动选中到 `recording` 列表，运行工作流时作为 `VIDEO` 输出，接 `Get Video Components` → `Run InstantHMR Prediction` 及后续流程（`example_workflows/instanthmr_live.json`）。
-- `Detect every`：每 N 帧运行一次检测器，中间几帧沿用上次的人物框；检测器是最慢的一步，设 2–3 预览更流畅。`FoV` 和预测节点的 `fov` 含义相同。
-- **角色**：`Detect every` 旁边的列表列出 `input` 文件夹（例如 `input/3d/`）里带骨骼的角色（`.fbx`、`.glb`、`.gltf`、`.vrm`）。选中后 3D 视图用它代替 MHR 人体，每个人一份。Mixamo、Unreal 等骨架按骨骼名匹配，VRM 按其人形骨骼表匹配。T-pose 和 A-pose 角色都可以用，角色会按表演者的腿长缩放。
-- **VMC**：填入接收 [VMC 协议](https://protocol.vmc.info/) 的软件地址 `host:port`（VSeeFace、Warudo、VNyan、Blender 的 VMC4B、Unity 的 VMC4U），把第一个人的动作作为人形角色姿态实时发过去，例如 `127.0.0.1:39539`。数据由 ComfyUI 发出，所以地址按运行 ComfyUI 的电脑来填。清空即停止。
+- `camera` 选 **This device**：使用打开 ComfyUI 的这台设备的摄像头。
+- `camera` 选 **Phone / other device**：节点显示二维码，同一局域网的手机扫码后，手机页面推送摄像头画面并显示骨架，节点显示 3D 视图。
+- `● Record` 把收到的画面录到 `input/instanthmr_live/`。新片段会自动选中到 `recording` 列表，运行工作流时作为 `VIDEO` 输出，接 `Get Video Components` → `Run InstantHMR Prediction` 及后续流程（`example_workflows/instanthmr_live.json`）。
+- `detect_every`（高级输入）：每 N 帧运行一次检测器，中间几帧沿用上次的人物框；检测器是最慢的一步，设 2–3 预览更流畅。`fov`（高级输入）和预测节点的 `fov` 含义相同。
+- `character` 列出 `input` 文件夹（例如 `input/3d/`）里带骨骼的角色（`.fbx`、`.glb`、`.gltf`、`.vrm`）。选中后 3D 视图用它代替 MHR 人体，每个人一份。Mixamo、Unreal 等骨架按骨骼名匹配，VRM 按其人形骨骼表匹配。T-pose 和 A-pose 角色都可以用，角色会按表演者的腿长缩放。
+- `vmc`：填入接收 [VMC 协议](https://protocol.vmc.info/) 的软件地址 `host:port`（VSeeFace、Warudo、VNyan、Blender 的 VMC4B、Unity 的 VMC4U），把第一个人的动作作为人形角色姿态实时发过去，例如 `127.0.0.1:39539`。数据由 ComfyUI 发出，所以地址按运行 ComfyUI 的电脑来填。清空即停止。
 
 浏览器只在 `localhost` 或 HTTPS 下允许打开摄像头。手机使用时，用证书启动 ComfyUI，例如自签名证书：
 

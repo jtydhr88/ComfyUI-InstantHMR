@@ -28,14 +28,14 @@ The output works with the native nodes:
 
 ![Live capture](docs/live_capture.jpg)
 
-`InstantHMR Live Capture` runs RT-DETR and InstantHMR on a camera feed while you watch: the camera image with the 2D skeletons on the left, the 3D bodies on the right (drag to orbit). Pick the InstantHMR model, the RT-DETR detector and the camera in the node, then press `Start`.
+`InstantHMR Live Capture` runs RT-DETR and InstantHMR on a camera feed while you watch: the camera image with the 2D skeletons on the left, the 3D bodies on the right (drag to orbit). Pick the InstantHMR `model`, the RT-DETR `detector` and the `camera` in the node, then press `Start`. These settings are saved with the workflow.
 
-- **This device** uses the webcam of the browser showing ComfyUI.
-- **Phone / other device** shows a QR code. Scan it with a phone on the same network; the phone page streams its camera and shows the skeletons, while the node shows the 3D view.
-- `● Rec` records the incoming frames to `input/instanthmr_live/`. The new clip is selected in the `recording` list, and running the workflow outputs it as `VIDEO`, ready for `Get Video Components` → `Run InstantHMR Prediction` and the rest of the pipeline (`example_workflows/instanthmr_live.json`).
-- `Detect every` runs the detector every N frames and reuses its boxes in between; the detector is the slowest step, so 2-3 keeps the preview smooth. `FoV` works like the prediction node's `fov`.
-- **Character**: the list next to `Detect every` shows rigged characters (`.fbx`, `.glb`, `.gltf`, `.vrm`) found in the `input` folder, for example `input/3d/`. Pick one and the 3D view drives it instead of the MHR body, one copy per person. Bones are matched by name for Mixamo, Unreal and similar rigs, and from the humanoid table for VRM. T-pose and A-pose characters both work; the character is scaled to the performer's leg length.
-- **VMC**: type `host:port` of an app that receives the [VMC protocol](https://protocol.vmc.info/) (VSeeFace, Warudo, VNyan, VMC4B for Blender, VMC4U for Unity) to stream the first person as a humanoid avatar pose, for example `127.0.0.1:39539`. ComfyUI sends it, so the address is seen from the computer running ComfyUI. Clear the field to stop.
+- `camera` **This device** uses the webcam of the browser showing ComfyUI.
+- `camera` **Phone / other device** shows a QR code. Scan it with a phone on the same network; the phone page streams its camera and shows the skeletons, while the node shows the 3D view.
+- `● Record` records the incoming frames to `input/instanthmr_live/`. The new clip is selected in the `recording` list, and running the workflow outputs it as `VIDEO`, ready for `Get Video Components` → `Run InstantHMR Prediction` and the rest of the pipeline (`example_workflows/instanthmr_live.json`).
+- `detect_every` (advanced input) runs the detector every N frames and reuses its boxes in between; the detector is the slowest step, so 2-3 keeps the preview smooth. `fov` (advanced input) works like the prediction node's `fov`.
+- `character` lists rigged characters (`.fbx`, `.glb`, `.gltf`, `.vrm`) found in the `input` folder, for example `input/3d/`. Pick one and the 3D view drives it instead of the MHR body, one copy per person. Bones are matched by name for Mixamo, Unreal and similar rigs, and from the humanoid table for VRM. T-pose and A-pose characters both work; the character is scaled to the performer's leg length.
+- `vmc`: type `host:port` of an app that receives the [VMC protocol](https://protocol.vmc.info/) (VSeeFace, Warudo, VNyan, VMC4B for Blender, VMC4U for Unity) to stream the first person as a humanoid avatar pose, for example `127.0.0.1:39539`. ComfyUI sends it, so the address is seen from the computer running ComfyUI. Clear the field to stop.
 
 Browsers open a camera only on `localhost` or over HTTPS. For a phone, start ComfyUI with a certificate, for example a self-signed one:
 

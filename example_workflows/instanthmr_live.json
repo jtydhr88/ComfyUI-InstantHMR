@@ -706,7 +706,7 @@
    ],
    "size": [
     760,
-    560
+    720
    ],
    "flags": {},
    "order": 3,
@@ -725,10 +725,24 @@
     "Node name for S&R": "InstantHMRLiveCapture"
    },
    "widgets_values": [
-    ""
+    "",
+    "instanthmr_medium.safetensors",
+    "rt_detr_v4-x-hgnet_fp16.safetensors",
+    "Phone / other device",
+    "MHR body",
+    "",
+    0,
+    2
    ],
    "widgets_values_named": {
-    "recording": ""
+    "recording": "",
+    "model": "instanthmr_medium.safetensors",
+    "detector": "rt_detr_v4-x-hgnet_fp16.safetensors",
+    "camera": "Phone / other device",
+    "character": "MHR body",
+    "vmc": "",
+    "fov": 0,
+    "detect_every": 2
    }
   },
   {
@@ -1277,7 +1291,7 @@
     -3760,
     5090,
     800,
-    650
+    840
    ],
    "color": "#3f789e",
    "flags": {}

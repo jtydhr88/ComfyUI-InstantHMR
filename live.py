@@ -24,8 +24,6 @@ from comfy.ldm.rt_detr.rtdetr_v4 import COCO_CLASSES
 from .humanoid import BONES, HumanoidRig, VMCSender, mat_to_quat
 from .nodes import FOCAL_DIAG, RECORD_DIR, InstantHMRLoader, crop_batch, recording_files
 
-CHARACTER_EXTENSIONS = (".fbx", ".glb", ".gltf", ".vrm")
-
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 MAX_PERSONS = 4
 PERSON = COCO_CLASSES.index("person")
@@ -121,14 +119,6 @@ class Room:
         self.set_vmc("")
 
 
-def character_files():
-    root = folder_paths.get_input_directory()
-    files = []
-    for folder, _, names in os.walk(root):
-        files += [os.path.relpath(os.path.join(folder, n), root).replace(os.sep, "/") for n in names if n.lower().endswith(CHARACTER_EXTENSIONS)]
-    return sorted(files)
-
-
 rooms = {}
 # Shared by all rooms so two live views never hold two copies; dropped when the last room closes.
 models = {}
@@ -199,10 +189,6 @@ def register_routes(routes):
     @routes.get("/instanthmr/recordings")
     async def recordings(request):
         return web.json_response(recording_files())
-
-    @routes.get("/instanthmr/characters")
-    async def characters(request):
-        return web.json_response(await asyncio.to_thread(character_files))
 
     @routes.get("/instanthmr/live")
     async def live(request):

@@ -4,13 +4,6 @@ import { CameraStreamer, drawPersons, liveUrl } from "/instanthmr/static/camera_
 
 const STYLE = `
 .ihmr-live { display: flex; flex-direction: column; gap: 6px; height: 100%; min-height: 0; font-size: 12px; color: var(--input-text, #ddd); }
-.ihmr-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.ihmr-bar select, .ihmr-bar input, .ihmr-bar button { background: var(--comfy-input-bg, #222); color: inherit; border: 1px solid var(--border-color, #444); border-radius: 6px; padding: 3px 6px; font: inherit; }
-.ihmr-bar input { width: 52px; }
-.ihmr-bar input.vmc { width: 120px; }
-.ihmr-bar button { cursor: pointer; }
-.ihmr-bar button.rec { color: #f87171; }
-.ihmr-bar button.rec.on { background: #b91c1c; color: #fff; }
 .ihmr-views { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .ihmr-view { position: relative; min-height: 0; background: #0b0b0b; border-radius: 6px; overflow: hidden; }
 .ihmr-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -20,16 +13,14 @@ const STYLE = `
 .ihmr-status { opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `;
 
+const CAMERAS = { "Phone / other device": "remote", "This device": "local" };
+const MHR_BODY = "MHR body";
+
 function el(tag, attrs = {}, children = []) {
   const e = document.createElement(tag);
   Object.assign(e, attrs);
   e.append(...children);
   return e;
-}
-
-async function listModels(folder, test) {
-  const files = await (await api.fetchApi(`/models/${folder}`)).json();
-  return files.filter((f) => test.test(f));
 }
 
 async function phoneUrl(room) {
@@ -44,77 +35,59 @@ async function phoneUrl(room) {
 class LiveView {
   constructor(node) {
     this.node = node;
-    this.settings = node.properties.instanthmr_live ??= {
-      room: Math.random().toString(36).slice(2, 10),
-      source: "remote", model: "", detector: "", fov: 0, detect_every: 2,
-    };
-    this.settings.character ??= "";
-    this.settings.vmc ??= "";
     this.faces = null;
     this.meshes = [];
     this.characters = [];
-    this.build();
-  }
+    // The settings are the node's own inputs; react when they change.
+    const onChange = { camera: () => this.stop(), character: () => this.loadCharacter() };
+    this.widgets = {};
+    for (const name of ["model", "detector", "camera", "character", "vmc", "fov", "detect_every"]) {
+      const w = (this.widgets[name] = node.widgets.find((w) => w.name === name));
+      const callback = w.callback;
+      w.callback = (...args) => {
+        const result = callback?.apply(w, args);
+        (onChange[name] ?? (() => this.sendSettings()))();
+        return result;
+      };
+    }
+    const button = (name, label, callback) => {
+      const b = node.addWidget("button", name, null, callback, { serialize: false });
+      b.serialize = false;
+      b.label = label;
+      return b;
+    };
+    this.startBtn = button("start", "Start", () => (this.ws ? this.stop() : this.start()));
+    this.recBtn = button("record", "● Record", () => this.ws && this.toggleRecording());
 
-  build() {
-    const s = this.settings;
-    this.model = el("select", { title: "InstantHMR model" });
-    this.detector = el("select", { title: "Person detector" });
-    this.source = el("select", { title: "Camera" }, [
-      el("option", { value: "remote", textContent: "Phone / other device" }),
-      el("option", { value: "local", textContent: "This device" }),
-    ]);
-    this.source.value = s.source;
-    this.fov = el("input", { type: "number", min: 0, max: 179, step: 1, value: s.fov, title: "Vertical FoV in degrees, 0 = 1.05x diagonal focal" });
-    this.every = el("input", { type: "number", min: 1, max: 10, step: 1, value: s.detect_every, title: "Run the detector every N frames" });
-    this.character = el("select", { title: "Body shown in the 3D view: the MHR mesh, or a rigged character from the input folder (FBX, glTF, VRM)" });
-    this.vmc = el("input", { className: "vmc", value: s.vmc, placeholder: "VMC host:port", title: "Send the first person to a VMC protocol app (VSeeFace, Warudo, VNyan...), e.g. 127.0.0.1:39539. Empty = off" });
-    this.startBtn = el("button", { textContent: "Start" });
-    this.recBtn = el("button", { className: "rec", textContent: "● Rec", disabled: true });
     this.status = el("div", { className: "ihmr-status", textContent: "Stopped" });
     this.video = el("video", { muted: true, playsInline: true });
     this.view2d = el("canvas");
     this.canvas3d = el("canvas");
     this.remote = el("div", { className: "ihmr-remote" });
     this.root = el("div", { className: "ihmr-live" }, [
-      el("div", { className: "ihmr-bar" }, [this.model, this.detector, this.source, "FoV", this.fov, "Detect every", this.every, this.character, this.vmc, this.startBtn, this.recBtn]),
       el("div", { className: "ihmr-views" }, [
         el("div", { className: "ihmr-view" }, [this.view2d, this.remote]),
         el("div", { className: "ihmr-view" }, [this.canvas3d]),
       ]),
       this.status,
     ]);
-    for (const input of [this.model, this.detector, this.source, this.fov, this.every, this.vmc]) {
-      input.addEventListener("change", () => this.saveSettings());
-    }
-    this.character.addEventListener("change", () => {
-      this.saveSettings();
-      this.loadCharacter();
-    });
-    this.startBtn.onclick = () => (this.ws ? this.stop() : this.start());
-    this.recBtn.onclick = () => this.toggleRecording();
-    this.fillModels();
+    node.addDOMWidget("live_view", "instanthmr_live", this.root, { serialize: false, getMinHeight: () => 320 }).serialize = false;
   }
 
-  async fillModels() {
-    const [models, detectors, characters] = await Promise.all([
-      listModels("detection", /instanthmr/i), listModels("diffusion_models", /rt_detr/i), (await api.fetchApi("/instanthmr/characters")).json(),
-    ]);
-    this.model.replaceChildren(...models.map((m) => el("option", { value: m, textContent: m })));
-    this.detector.replaceChildren(...detectors.map((m) => el("option", { value: m, textContent: m })));
-    this.character.replaceChildren(el("option", { value: "", textContent: "MHR body" }), ...characters.map((c) => el("option", { value: c, textContent: c })));
-    if (models.includes(this.settings.model)) this.model.value = this.settings.model;
-    if (detectors.includes(this.settings.detector)) this.detector.value = this.settings.detector;
-    if (characters.includes(this.settings.character)) this.character.value = this.settings.character;
-    this.saveSettings();
+  get room() {
+    return (this.node.properties.instanthmr_live_room ??= Math.random().toString(36).slice(2, 10));
   }
 
-  saveSettings() {
-    Object.assign(this.settings, {
-      model: this.model.value, detector: this.detector.value, source: this.source.value,
-      fov: Number(this.fov.value) || 0, detect_every: Math.max(1, Number(this.every.value) || 1),
-      character: this.character.value, vmc: this.vmc.value.trim(),
-    });
+  get settings() {
+    const w = this.widgets;
+    return {
+      model: w.model.value, detector: w.detector.value, camera: CAMERAS[w.camera.value] ?? "remote",
+      fov: Number(w.fov.value) || 0, detect_every: Math.max(1, Math.round(Number(w.detect_every.value) || 1)),
+      character: w.character.value === MHR_BODY ? "" : w.character.value, vmc: String(w.vmc.value ?? "").trim(),
+    };
+  }
+
+  sendSettings() {
     if (this.ws?.readyState === WebSocket.OPEN) {
       const { model, detector, fov, detect_every, vmc } = this.settings;
       this.ws.send(JSON.stringify({ type: "settings", model, detector, fov, detect_every, vmc }));
@@ -144,25 +117,25 @@ class LiveView {
   async start() {
     await this.initThree();
     if (this.settings.character && !this.characterSource) this.loadCharacter();
-    const ws = (this.ws = new WebSocket(liveUrl(this.settings.room, "viewer")));
+    const room = this.room;
+    const ws = (this.ws = new WebSocket(liveUrl(room, "viewer")));
     ws.binaryType = "arraybuffer";
-    ws.onopen = () => this.saveSettings();
+    ws.onopen = () => this.sendSettings();
     ws.onmessage = (e) => (typeof e.data === "string" ? this.onJson(JSON.parse(e.data)) : this.onBinary(e.data));
     ws.onclose = () => this.ws === ws && this.stop();
-    this.startBtn.textContent = "Stop";
-    this.recBtn.disabled = false;
+    this.startBtn.label = "Stop";
     this.framed = false;
     this.lastFrame = performance.now();
-    if (this.settings.source === "local") {
+    if (this.settings.camera === "local") {
       this.remote.replaceChildren();
-      this.camera = new CameraStreamer(this.settings.room, this.video, () => {});
+      this.camera = new CameraStreamer(room, this.video, () => {});
       try {
         await this.camera.start("user");
       } catch (e) {
         this.status.textContent = e.message;
       }
     } else {
-      const url = await phoneUrl(this.settings.room);
+      const url = await phoneUrl(room);
       const { default: qrcode } = await import("/instanthmr/static/lib/qrcode.mjs");
       const qr = qrcode(0, "M");
       qr.addData(url);
@@ -172,6 +145,7 @@ class LiveView {
       this.remote.replaceChildren(el("img", { src: qr.createDataURL(4, 0) }), el("a", { href: url, target: "_blank", textContent: url }), el("div", { textContent: hint }));
       this.status.textContent = "Waiting for a camera";
     }
+    this.node.setDirtyCanvas(true, true);
   }
 
   stop() {
@@ -180,18 +154,18 @@ class LiveView {
     const ws = this.ws;
     this.ws = null;
     ws?.close();
-    this.startBtn.textContent = "Start";
-    this.recBtn.disabled = true;
-    this.recBtn.classList.remove("on");
+    this.startBtn.label = "Start";
+    this.recBtn.label = "● Record";
     this.recording = false;
     this.status.textContent = "Stopped";
+    this.node.setDirtyCanvas(true, true);
   }
 
   toggleRecording() {
     this.recording = !this.recording;
-    this.recBtn.classList.toggle("on", this.recording);
-    this.recBtn.textContent = this.recording ? "■ Stop" : "● Rec";
-    this.ws?.send(JSON.stringify({ type: "record", on: this.recording }));
+    this.recBtn.label = this.recording ? "■ Stop recording" : "● Record";
+    this.ws.send(JSON.stringify({ type: "record", on: this.recording }));
+    this.node.setDirtyCanvas(true, true);
   }
 
   async onJson(msg) {
@@ -364,18 +338,11 @@ app.registerExtension({
     const onNodeCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       onNodeCreated?.apply(this, arguments);
-      const node = this;
-      const container = el("div", { style: "width: 100%; height: 100%;" });
-      node.addDOMWidget("live_view", "instanthmr_live", container, { serialize: false, getMinHeight: () => 420 });
-      node.setSize([760, 560]);
-      // The saved room and settings arrive with configure(), after onNodeCreated.
-      queueMicrotask(() => {
-        node.instanthmrLive = new LiveView(node);
-        container.append(node.instanthmrLive.root);
-      });
-      const onRemoved = node.onRemoved;
-      node.onRemoved = function () {
-        node.instanthmrLive?.dispose();
+      this.instanthmrLive = new LiveView(this);
+      this.setSize([640, 720]);
+      const onRemoved = this.onRemoved;
+      this.onRemoved = function () {
+        this.instanthmrLive.dispose();
         return onRemoved?.apply(this, arguments);
       };
     };

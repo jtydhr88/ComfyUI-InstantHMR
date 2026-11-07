@@ -24,6 +24,9 @@ IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 CROP_EXPAND = 1.2
 RECORD_DIR = "instanthmr_live"
+CHARACTER_EXTENSIONS = (".fbx", ".glb", ".gltf", ".vrm")
+LIVE_CAMERAS = ["Phone / other device", "This device"]
+MHR_BODY = "MHR body"
 # Focal when the camera is unknown, as a multiple of the image diagonal (InstantHMR's training default).
 FOCAL_DIAG = 1.05
 
@@ -173,8 +176,17 @@ def recording_files():
     return sorted((f"{RECORD_DIR}/{f}" for f in os.listdir(root) if f.endswith(".mp4")), reverse=True)
 
 
+def character_files():
+    root = folder_paths.get_input_directory()
+    files = []
+    for folder, _, names in os.walk(root):
+        files += [os.path.relpath(os.path.join(folder, n), root).replace(os.sep, "/") for n in names if n.lower().endswith(CHARACTER_EXTENSIONS)]
+    return sorted(files)
+
+
 class InstantHMRLiveCapture(io.ComfyNode):
-    """Live preview from this device's camera or a phone on the LAN; the recorded clip is the output."""
+    """Live preview from this device's camera or a phone on the LAN; the recorded clip is the output.
+    Like WebcamCapture, the live settings are inputs the node's frontend reads; execute only loads the recording."""
 
     @classmethod
     def define_schema(cls):
@@ -182,16 +194,32 @@ class InstantHMRLiveCapture(io.ComfyNode):
             node_id="InstantHMRLiveCapture",
             display_name="InstantHMR Live Capture",
             category="image/detection",
-            inputs=[io.Combo.Input("recording", options=recording_files(), tooltip="A clip recorded with the live view")],
+            inputs=[
+                io.Combo.Input("recording", options=recording_files(), tooltip="A clip recorded with the live view"),
+                io.Combo.Input("model", options=[f for f in folder_paths.get_filename_list("detection") if "instanthmr" in f.lower()],
+                               tooltip="InstantHMR model for the live view"),
+                io.Combo.Input("detector", options=[f for f in folder_paths.get_filename_list("diffusion_models") if "rt_detr" in f.lower()],
+                               tooltip="RT-DETR person detector for the live view"),
+                io.Combo.Input("camera", options=LIVE_CAMERAS, tooltip="Phone / other device shows a QR code to open on the phone"),
+                io.Combo.Input("character", options=[MHR_BODY, *character_files()],
+                               tooltip="Body in the 3D view: the MHR mesh, or a rigged FBX, glTF or VRM character from the input folder"),
+                io.String.Input("vmc", default="", placeholder="host:port, e.g. 127.0.0.1:39539",
+                                tooltip="Stream the first person to a VMC protocol app (VSeeFace, Warudo, VNyan...); empty = off"),
+                io.Float.Input("fov", default=0.0, min=0.0, max=179.0, step=1.0, advanced=True,
+                               tooltip="Vertical field of view in degrees; 0 uses a focal of 1.05x the image diagonal"),
+                io.Int.Input("detect_every", default=2, min=1, max=10, advanced=True,
+                             tooltip="Run the detector every N frames and reuse its boxes in between"),
+            ],
             outputs=[io.Video.Output()],
         )
 
     @classmethod
-    def execute(cls, recording) -> io.NodeOutput:
+    def execute(cls, recording, **live_settings) -> io.NodeOutput:
         return io.NodeOutput(InputImpl.VideoFromFile(folder_paths.get_annotated_filepath(recording)))
 
     @classmethod
-    def validate_inputs(cls, recording):
+    def validate_inputs(cls, recording, model, detector, character):
+        # Only the recording is needed to run; the live models and character may be missing on this machine.
         if recording not in recording_files():
             return f"Recording not found: {recording}"
         return True

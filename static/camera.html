@@ -51,7 +51,7 @@ function onResult(r) {
     return;
   }
   drawPersons(ctx, r.persons, rect.width / r.w);
-  status.textContent = `Room ${room} · ${fps.toFixed(1)} fps · ${r.persons.length} people${r.recorded ? ` · REC ${r.recorded}` : ""}`;
+  status.textContent = `Room ${room} · ${fps.toFixed(1)} fps · ${r.persons.length === 1 ? "1 person" : `${r.persons.length} people`}${r.recorded ? ` · REC ${r.recorded}` : ""}`;
 }
 
 async function run() {

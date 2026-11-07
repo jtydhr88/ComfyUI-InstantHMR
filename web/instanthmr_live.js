@@ -206,7 +206,7 @@ class LiveView {
     const fps = 1000 / (now - this.lastFrame);
     this.lastFrame = now;
     if (!header.error) {
-      this.status.textContent = `${fps.toFixed(1)} fps · detector ${header.det_ms.toFixed(0)} ms · InstantHMR ${header.hmr_ms.toFixed(0)} ms · ${header.persons.length} people`
+      this.status.textContent = `${fps.toFixed(1)} fps · detector ${header.det_ms.toFixed(0)} ms · InstantHMR ${header.hmr_ms.toFixed(0)} ms · ${header.persons.length === 1 ? "1 person" : `${header.persons.length} people`}`
         + (header.recorded ? ` · REC ${header.recorded} frames` : this.saved ? ` · ${this.saved}` : "");
     }
   }

@@ -51,13 +51,13 @@ Put your computer's LAN address in `subjectAltName`, open ComfyUI at `https://<a
 
 | File | Backbone | 3DPW PA-MPJPE (mm) | Licence |
 | --- | --- | --- | --- |
-| `instanthmr_nano.safetensors` | HGNetV2-B0 | 46.6 | CC BY-NC 4.0 |
-| `instanthmr_tiny.safetensors` | HGNetV2-B1 | 44.0 | CC BY-NC 4.0 |
-| `instanthmr_small.safetensors` | HGNetV2-B2 | 41.7 | CC BY-NC 4.0 |
-| `instanthmr_medium.safetensors` | HGNetV2-B4 | 40.0 | CC BY-NC 4.0 |
-| `instanthmr_medium_commercial.safetensors` | HGNetV2-B4 | 50.7 | Apache-2.0 |
+| `instanthmr_nano.safetensors` | HGNetV2-B0 | 46.6 | SAM License, non-commercial |
+| `instanthmr_tiny.safetensors` | HGNetV2-B1 | 44.0 | SAM License, non-commercial |
+| `instanthmr_small.safetensors` | HGNetV2-B2 | 41.7 | SAM License, non-commercial |
+| `instanthmr_medium.safetensors` | HGNetV2-B4 | 40.0 | SAM License, non-commercial |
+| `instanthmr_medium_commercial.safetensors` | HGNetV2-B4 | 50.7 | SAM License |
 
-Download them from [Hugging Face](https://huggingface.co/jtydhr88/ComfyUI-InstantHMR) and put them in `models/detection`. Each file holds the network and the MHR body rig it is trained on, so no other model is needed. The CC BY-NC weights are for non-commercial use; `medium_commercial` is trained on commercially usable images only.
+Download them from [Hugging Face](https://huggingface.co/jtydhr88/ComfyUI-InstantHMR) and put them in `models/detection`. Each file holds the network and the MHR body rig it is trained on, so no other model is needed. All weights are under the [SAM License](https://huggingface.co/jtydhr88/ComfyUI-InstantHMR/blob/main/LICENSE), since they are trained on SAM 3D Body annotations and contain parts of its checkpoint. `nano`, `tiny`, `small` and `medium` are also for non-commercial use only; `medium_commercial` is trained on commercially usable images and allows commercial use under the SAM License terms.
 
 ### Converting the released ONNX files
 
@@ -84,4 +84,4 @@ python custom_nodes/ComfyUI-InstantHMR/scripts/convert_onnx.py instanthmr-medium
 
 ## Credits
 
-InstantHMR by Mohamed Adjel, Kahina Chalabi and Vincent Bonnet ([paper](https://hal.science/hal-05854387)), Apache-2.0 code. The body model is Meta's [MHR](https://github.com/facebookresearch/MHR) (Apache-2.0). Demo footage from [Mixkit](https://mixkit.co/).
+InstantHMR by Mohamed Adjel, Kahina Chalabi and Vincent Bonnet ([paper](https://hal.science/hal-05854387)); code under Apache-2.0, weights under the SAM License. The body model is Meta's [MHR](https://github.com/facebookresearch/MHR) (Apache-2.0). Demo footage from [Mixkit](https://mixkit.co/).

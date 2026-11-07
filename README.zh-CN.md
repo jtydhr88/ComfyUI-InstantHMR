@@ -51,13 +51,13 @@ python main.py --listen 0.0.0.0 --tls-keyfile key.pem --tls-certfile cert.pem
 
 | 文件 | 主干网络 | 3DPW PA-MPJPE (mm) | 许可证 |
 | --- | --- | --- | --- |
-| `instanthmr_nano.safetensors` | HGNetV2-B0 | 46.6 | CC BY-NC 4.0 |
-| `instanthmr_tiny.safetensors` | HGNetV2-B1 | 44.0 | CC BY-NC 4.0 |
-| `instanthmr_small.safetensors` | HGNetV2-B2 | 41.7 | CC BY-NC 4.0 |
-| `instanthmr_medium.safetensors` | HGNetV2-B4 | 40.0 | CC BY-NC 4.0 |
-| `instanthmr_medium_commercial.safetensors` | HGNetV2-B4 | 50.7 | Apache-2.0 |
+| `instanthmr_nano.safetensors` | HGNetV2-B0 | 46.6 | SAM License，仅限非商用 |
+| `instanthmr_tiny.safetensors` | HGNetV2-B1 | 44.0 | SAM License，仅限非商用 |
+| `instanthmr_small.safetensors` | HGNetV2-B2 | 41.7 | SAM License，仅限非商用 |
+| `instanthmr_medium.safetensors` | HGNetV2-B4 | 40.0 | SAM License，仅限非商用 |
+| `instanthmr_medium_commercial.safetensors` | HGNetV2-B4 | 50.7 | SAM License |
 
-从 [Hugging Face](https://huggingface.co/jtydhr88/ComfyUI-InstantHMR) 下载，放到 `models/detection`。每个文件都包含网络和它训练时用的 MHR 人体骨架，不需要其他模型。CC BY-NC 的权重仅限非商业使用；`medium_commercial` 只用可商用图片训练。
+从 [Hugging Face](https://huggingface.co/jtydhr88/ComfyUI-InstantHMR) 下载，放到 `models/detection`。每个文件都包含网络和它训练时用的 MHR 人体骨架，不需要其他模型。权重用 SAM 3D Body 的标注训练，并包含它的部分模型参数，所以全部采用 [SAM License](https://huggingface.co/jtydhr88/ComfyUI-InstantHMR/blob/main/LICENSE)。其中 `nano`、`tiny`、`small`、`medium` 只能非商用；`medium_commercial` 只用可商用图片训练，按 SAM License 的条款可以商用。
 
 ### 转换官方 ONNX 文件
 
@@ -84,4 +84,4 @@ python custom_nodes/ComfyUI-InstantHMR/scripts/convert_onnx.py instanthmr-medium
 
 ## 致谢
 
-InstantHMR 作者 Mohamed Adjel、Kahina Chalabi、Vincent Bonnet（[论文](https://hal.science/hal-05854387)），代码 Apache-2.0。人体模型是 Meta 的 [MHR](https://github.com/facebookresearch/MHR)（Apache-2.0）。演示素材来自 [Mixkit](https://mixkit.co/)。
+InstantHMR 作者 Mohamed Adjel、Kahina Chalabi、Vincent Bonnet（[论文](https://hal.science/hal-05854387)），代码 Apache-2.0，权重 SAM License。人体模型是 Meta 的 [MHR](https://github.com/facebookresearch/MHR)（Apache-2.0）。演示素材来自 [Mixkit](https://mixkit.co/)。

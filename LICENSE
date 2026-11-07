@@ -205,12 +205,9 @@
 THIRD-PARTY NOTICES
 -------------------
 
-The InstantHMR model weights distributed at
-https://huggingface.co/momolesang/InstantHMR are released under the SAM
-license, since the model is a distillation of Meta's SAM 3D Body
-(https://github.com/facebookresearch/sam-3d-body). Refer to that
-repository for the full SAM license text and applicable use restrictions.
-
-The demo uses Roboflow's RF-DETR for person detection, which is
-distributed under its own license. See https://github.com/roboflow/rf-detr
-for terms.
+This license covers the code in this repository. The InstantHMR weights
+(https://huggingface.co/jtydhr88/ComfyUI-InstantHMR, converted from
+https://huggingface.co/momolesang/InstantHMR) are under the SAM License, since
+they are trained on SAM 3D Body annotations and contain parts of its
+checkpoint. The nano, tiny, small and medium weights are also for
+non-commercial use only. The SAM License text ships with the weights.

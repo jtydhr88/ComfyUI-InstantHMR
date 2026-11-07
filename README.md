@@ -12,7 +12,7 @@ English | [中文](README.zh-CN.md)
 | --- | --- |
 | `Load InstantHMR Model` | loads an InstantHMR checkpoint from `models/detection` |
 | `Run InstantHMR Prediction` | predicts one MHR body per person box and outputs `MHR_POSE_DATA` |
-| `InstantHMR Live Capture` | live 2D and 3D preview from a camera, with recording; outputs the recorded clip as `VIDEO` |
+| `InstantHMR Live Capture` | live 2D and 3D preview from a camera that can drive a rigged character or a VMC app, with recording; outputs the recorded clip as `VIDEO` |
 
 `Run InstantHMR Prediction` takes person boxes from `RT-DETR Detect` (class `person`) or tracks from `SAM3 Video Track`; with neither, the whole frame is one person. `fov` is the vertical field of view in degrees; connect `MoGe` through `MoGe Geometry To FOV` for the camera of a video, or leave it at 0 for a focal of 1.05x the image diagonal.
 
@@ -34,6 +34,8 @@ The output works with the native nodes:
 - **Phone / other device** shows a QR code. Scan it with a phone on the same network; the phone page streams its camera and shows the skeletons, while the node shows the 3D view.
 - `● Rec` records the incoming frames to `input/instanthmr_live/`. The new clip is selected in the `recording` list, and running the workflow outputs it as `VIDEO`, ready for `Get Video Components` → `Run InstantHMR Prediction` and the rest of the pipeline (`example_workflows/instanthmr_live.json`).
 - `Detect every` runs the detector every N frames and reuses its boxes in between; the detector is the slowest step, so 2-3 keeps the preview smooth. `FoV` works like the prediction node's `fov`.
+- **Character**: the list next to `Detect every` shows rigged characters (`.fbx`, `.glb`, `.gltf`, `.vrm`) found in the `input` folder, for example `input/3d/`. Pick one and the 3D view drives it instead of the MHR body, one copy per person. Bones are matched by name for Mixamo, Unreal and similar rigs, and from the humanoid table for VRM. T-pose and A-pose characters both work; the character is scaled to the performer's leg length.
+- **VMC**: type `host:port` of an app that receives the [VMC protocol](https://protocol.vmc.info/) (VSeeFace, Warudo, VNyan, VMC4B for Blender, VMC4U for Unity) to stream the first person as a humanoid avatar pose, for example `127.0.0.1:39539`. ComfyUI sends it, so the address is seen from the computer running ComfyUI. Clear the field to stop.
 
 Browsers open a camera only on `localhost` or over HTTPS. For a phone, start ComfyUI with a certificate, for example a self-signed one:
 

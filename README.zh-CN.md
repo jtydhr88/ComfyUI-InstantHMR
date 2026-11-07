@@ -12,7 +12,7 @@
 | --- | --- |
 | `Load InstantHMR Model` | 从 `models/detection` 加载 InstantHMR 模型 |
 | `Run InstantHMR Prediction` | 对每个人物框预测一个 MHR 人体，输出 `MHR_POSE_DATA` |
-| `InstantHMR Live Capture` | 摄像头实时 2D/3D 预览并录制，把录好的片段作为 `VIDEO` 输出 |
+| `InstantHMR Live Capture` | 摄像头实时 2D/3D 预览，可驱动带骨骼的角色或 VMC 软件，并可录制，把录好的片段作为 `VIDEO` 输出 |
 
 `Run InstantHMR Prediction` 的人物框可以来自 `RT-DETR Detect`（类别 `person`），也可以来自 `SAM3 Video Track` 的跟踪结果；两者都不接时，整帧当作一个人。`fov` 是垂直视场角（度）：视频可以通过 `MoGe` 和 `MoGe Geometry To FOV` 估计相机视场角，填 0 时焦距取画面对角线的 1.05 倍。
 
@@ -34,6 +34,8 @@
 - **Phone / other device**：节点显示二维码，同一局域网的手机扫码后，手机页面推送摄像头画面并显示骨架，节点显示 3D 视图。
 - `● Rec` 把收到的画面录到 `input/instanthmr_live/`。新片段会自动选中到 `recording` 列表，运行工作流时作为 `VIDEO` 输出，接 `Get Video Components` → `Run InstantHMR Prediction` 及后续流程（`example_workflows/instanthmr_live.json`）。
 - `Detect every`：每 N 帧运行一次检测器，中间几帧沿用上次的人物框；检测器是最慢的一步，设 2–3 预览更流畅。`FoV` 和预测节点的 `fov` 含义相同。
+- **角色**：`Detect every` 旁边的列表列出 `input` 文件夹（例如 `input/3d/`）里带骨骼的角色（`.fbx`、`.glb`、`.gltf`、`.vrm`）。选中后 3D 视图用它代替 MHR 人体，每个人一份。Mixamo、Unreal 等骨架按骨骼名匹配，VRM 按其人形骨骼表匹配。T-pose 和 A-pose 角色都可以用，角色会按表演者的腿长缩放。
+- **VMC**：填入接收 [VMC 协议](https://protocol.vmc.info/) 的软件地址 `host:port`（VSeeFace、Warudo、VNyan、Blender 的 VMC4B、Unity 的 VMC4U），把第一个人的动作作为人形角色姿态实时发过去，例如 `127.0.0.1:39539`。数据由 ComfyUI 发出，所以地址按运行 ComfyUI 的电脑来填。清空即停止。
 
 浏览器只在 `localhost` 或 HTTPS 下允许打开摄像头。手机使用时，用证书启动 ComfyUI，例如自签名证书：
 

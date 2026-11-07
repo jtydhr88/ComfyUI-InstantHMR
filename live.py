@@ -21,7 +21,10 @@ import folder_paths
 import comfy.utils
 from comfy.ldm.rt_detr.rtdetr_v4 import COCO_CLASSES
 
+from .humanoid import BONES, HumanoidRig, VMCSender, mat_to_quat
 from .nodes import FOCAL_DIAG, RECORD_DIR, InstantHMRLoader, crop_batch, recording_files
+
+CHARACTER_EXTENSIONS = (".fbx", ".glb", ".gltf", ".vrm")
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 MAX_PERSONS = 4
@@ -42,16 +45,24 @@ class Room:
         self.viewers = set()
         self.cameras = set()
         self.sending = set()
-        self.settings = {"model": None, "detector": None, "fov": 0.0, "detect_every": 2}
+        self.settings = {"model": None, "detector": None, "fov": 0.0, "detect_every": 2, "vmc": ""}
         self.boxes = torch.zeros(0, 4)
         self.frame_index = 0
         self.recording = None
+        self.vmc = None
+
+    def set_vmc(self, target):
+        if self.vmc:
+            self.vmc.close()
+        self.vmc = VMCSender(target) if target else None
 
     def model(self, kind, name):
         key = (kind, name)
         if key not in models:
             if kind == "hmr":
                 models[key] = InstantHMRLoader.execute(name).args[0]
+            elif kind == "humanoid":
+                models[key] = HumanoidRig(self.model("hmr", name).model.mhr)
             else:
                 models[key] = comfy.sd.load_diffusion_model(folder_paths.get_full_path_or_raise("diffusion_models", name))
         return models[key]
@@ -88,13 +99,34 @@ class Room:
                 cam_t = out["pred_cam_t"]
                 verts = (out["pred_vertices"] + cam_t[:, None]).float().cpu().numpy().tobytes()
                 kp2d, cam_t = kp2d.float().cpu().numpy(), cam_t.cpu().numpy()
-                persons = [{"bbox": self.boxes[i].tolist(), "kp2d": kp2d[i].round(1).ravel().tolist(), "cam_t": cam_t[i].tolist()} for i in range(len(kp2d))]
+                # Joint coords are in the camera frame (Y down); the bone rotations and the viewer use the MHR frame (Y up).
+                joints = out["pred_joint_coords"].float().cpu().numpy() * [1, -1, -1]
+                hips = joints[:, 1] + cam_t * [1, -1, -1]
+                legs = np.linalg.norm(joints[:, 2] - joints[:, 3], axis=1) + np.linalg.norm(joints[:, 3] - joints[:, 4], axis=1)
+                humanoid = self.model("humanoid", s["model"])
+                world = humanoid.world(out["joint_global_rots"])
+                bones = mat_to_quat(world).astype(np.float32).round(4)
+                persons = [{"bbox": self.boxes[i].tolist(), "kp2d": kp2d[i].round(1).ravel().tolist(), "cam_t": cam_t[i].tolist(),
+                            "bones": bones[i].ravel().tolist(), "hips": hips[i].round(4).tolist(), "leg": round(float(legs[i]), 4)} for i in range(len(kp2d))]
+                if self.vmc:
+                    self.vmc.send(humanoid.local(world[:1])[0], hips[0], time.monotonic())
             t2 = time.perf_counter()
         return {"type": "frame", "w": W, "h": H, "persons": persons, "det_ms": (t1 - t0) * 1000, "hmr_ms": (t2 - t1) * 1000}, verts
 
     def faces(self):
         with torch.inference_mode():
             return self.model("hmr", self.settings["model"]).model.head_pose.faces_np().astype(np.int32).tobytes()
+
+    def close(self):
+        self.set_vmc("")
+
+
+def character_files():
+    root = folder_paths.get_input_directory()
+    files = []
+    for folder, _, names in os.walk(root):
+        files += [os.path.relpath(os.path.join(folder, n), root).replace(os.sep, "/") for n in names if n.lower().endswith(CHARACTER_EXTENSIONS)]
+    return sorted(files)
 
 
 rooms = {}
@@ -168,6 +200,10 @@ def register_routes(routes):
     async def recordings(request):
         return web.json_response(recording_files())
 
+    @routes.get("/instanthmr/characters")
+    async def characters(request):
+        return web.json_response(await asyncio.to_thread(character_files))
+
     @routes.get("/instanthmr/live")
     async def live(request):
         room_id, role = request.query.get("room", ""), request.query.get("role", "viewer")
@@ -206,9 +242,17 @@ def register_routes(routes):
                 elif msg.type == web.WSMsgType.TEXT and role == "viewer":
                     data = json.loads(msg.data)
                     if data["type"] == "settings":
+                        vmc = room.settings["vmc"]
                         room.settings.update({k: data[k] for k in room.settings})
+                        if room.settings["vmc"] != vmc:
+                            try:
+                                room.set_vmc(room.settings["vmc"])
+                            except (ValueError, OSError) as e:
+                                room.settings["vmc"] = ""
+                                await ws.send_str(json.dumps({"type": "error", "error": f"VMC target: {e}"}))
                         if data["model"]:
-                            await ws.send_bytes(pack({"type": "faces"}, await loop.run_in_executor(GPU, room.faces)))
+                            bones = [[name, parent, child, aim] for name, parent, _, child, aim in BONES]
+                            await ws.send_bytes(pack({"type": "faces", "bones": bones}, await loop.run_in_executor(GPU, room.faces)))
                     elif data["type"] == "record":
                         if data["on"]:
                             room.recording = []
@@ -221,6 +265,7 @@ def register_routes(routes):
         finally:
             members.discard(ws)
             if not room.viewers and not room.cameras:
+                room.close()
                 rooms.pop(room_id, None)
                 if not rooms:
                     models.clear()

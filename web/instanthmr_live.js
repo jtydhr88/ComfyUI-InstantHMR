@@ -7,6 +7,7 @@ const STYLE = `
 .ihmr-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .ihmr-bar select, .ihmr-bar input, .ihmr-bar button { background: var(--comfy-input-bg, #222); color: inherit; border: 1px solid var(--border-color, #444); border-radius: 6px; padding: 3px 6px; font: inherit; }
 .ihmr-bar input { width: 52px; }
+.ihmr-bar input.vmc { width: 120px; }
 .ihmr-bar button { cursor: pointer; }
 .ihmr-bar button.rec { color: #f87171; }
 .ihmr-bar button.rec.on { background: #b91c1c; color: #fff; }
@@ -47,8 +48,11 @@ class LiveView {
       room: Math.random().toString(36).slice(2, 10),
       source: "remote", model: "", detector: "", fov: 0, detect_every: 2,
     };
+    this.settings.character ??= "";
+    this.settings.vmc ??= "";
     this.faces = null;
     this.meshes = [];
+    this.characters = [];
     this.build();
   }
 
@@ -63,6 +67,8 @@ class LiveView {
     this.source.value = s.source;
     this.fov = el("input", { type: "number", min: 0, max: 179, step: 1, value: s.fov, title: "Vertical FoV in degrees, 0 = 1.05x diagonal focal" });
     this.every = el("input", { type: "number", min: 1, max: 10, step: 1, value: s.detect_every, title: "Run the detector every N frames" });
+    this.character = el("select", { title: "Body shown in the 3D view: the MHR mesh, or a rigged character from the input folder (FBX, glTF, VRM)" });
+    this.vmc = el("input", { className: "vmc", value: s.vmc, placeholder: "VMC host:port", title: "Send the first person to a VMC protocol app (VSeeFace, Warudo, VNyan...), e.g. 127.0.0.1:39539. Empty = off" });
     this.startBtn = el("button", { textContent: "Start" });
     this.recBtn = el("button", { className: "rec", textContent: "● Rec", disabled: true });
     this.status = el("div", { className: "ihmr-status", textContent: "Stopped" });
@@ -71,27 +77,35 @@ class LiveView {
     this.canvas3d = el("canvas");
     this.remote = el("div", { className: "ihmr-remote" });
     this.root = el("div", { className: "ihmr-live" }, [
-      el("div", { className: "ihmr-bar" }, [this.model, this.detector, this.source, "FoV", this.fov, "Detect every", this.every, this.startBtn, this.recBtn]),
+      el("div", { className: "ihmr-bar" }, [this.model, this.detector, this.source, "FoV", this.fov, "Detect every", this.every, this.character, this.vmc, this.startBtn, this.recBtn]),
       el("div", { className: "ihmr-views" }, [
         el("div", { className: "ihmr-view" }, [this.view2d, this.remote]),
         el("div", { className: "ihmr-view" }, [this.canvas3d]),
       ]),
       this.status,
     ]);
-    for (const input of [this.model, this.detector, this.source, this.fov, this.every]) {
+    for (const input of [this.model, this.detector, this.source, this.fov, this.every, this.vmc]) {
       input.addEventListener("change", () => this.saveSettings());
     }
+    this.character.addEventListener("change", () => {
+      this.saveSettings();
+      this.loadCharacter();
+    });
     this.startBtn.onclick = () => (this.ws ? this.stop() : this.start());
     this.recBtn.onclick = () => this.toggleRecording();
     this.fillModels();
   }
 
   async fillModels() {
-    const [models, detectors] = await Promise.all([listModels("detection", /instanthmr/i), listModels("diffusion_models", /rt_detr/i)]);
+    const [models, detectors, characters] = await Promise.all([
+      listModels("detection", /instanthmr/i), listModels("diffusion_models", /rt_detr/i), (await api.fetchApi("/instanthmr/characters")).json(),
+    ]);
     this.model.replaceChildren(...models.map((m) => el("option", { value: m, textContent: m })));
     this.detector.replaceChildren(...detectors.map((m) => el("option", { value: m, textContent: m })));
+    this.character.replaceChildren(el("option", { value: "", textContent: "MHR body" }), ...characters.map((c) => el("option", { value: c, textContent: c })));
     if (models.includes(this.settings.model)) this.model.value = this.settings.model;
     if (detectors.includes(this.settings.detector)) this.detector.value = this.settings.detector;
+    if (characters.includes(this.settings.character)) this.character.value = this.settings.character;
     this.saveSettings();
   }
 
@@ -99,15 +113,37 @@ class LiveView {
     Object.assign(this.settings, {
       model: this.model.value, detector: this.detector.value, source: this.source.value,
       fov: Number(this.fov.value) || 0, detect_every: Math.max(1, Number(this.every.value) || 1),
+      character: this.character.value, vmc: this.vmc.value.trim(),
     });
     if (this.ws?.readyState === WebSocket.OPEN) {
-      const { model, detector, fov, detect_every } = this.settings;
-      this.ws.send(JSON.stringify({ type: "settings", model, detector, fov, detect_every }));
+      const { model, detector, fov, detect_every, vmc } = this.settings;
+      this.ws.send(JSON.stringify({ type: "settings", model, detector, fov, detect_every, vmc }));
+    }
+  }
+
+  async loadCharacter() {
+    this.characters.forEach((c) => c.dispose());
+    this.characters = [];
+    this.characterSource = null;
+    const file = this.settings.character;
+    if (!file || !this.renderer) return;
+    const slash = file.lastIndexOf("/");
+    const subfolder = slash < 0 ? "" : file.slice(0, slash);
+    const url = api.apiURL(`/view?type=input&subfolder=${encodeURIComponent(subfolder)}&filename=${encodeURIComponent(file.slice(slash + 1))}`);
+    this.status.textContent = `Loading ${file}...`;
+    try {
+      const { loadCharacter, Character } = await import("/instanthmr/static/character.js");
+      const source = { ...(await loadCharacter(url, file)), Character };
+      if (this.settings.character === file) this.characterSource = source;
+      this.status.textContent = `Loaded ${file}`;
+    } catch (e) {
+      this.status.textContent = `${file}: ${e.message}`;
     }
   }
 
   async start() {
     await this.initThree();
+    if (this.settings.character && !this.characterSource) this.loadCharacter();
     const ws = (this.ws = new WebSocket(liveUrl(this.settings.room, "viewer")));
     ws.binaryType = "arraybuffer";
     ws.onopen = () => this.saveSettings();
@@ -185,12 +221,13 @@ class LiveView {
     });
     if (header.type === "faces") {
       this.faces = new Uint32Array(new Int32Array(parts[0]));
+      this.boneTable = header.bones;
       this.meshes.forEach((m) => m.geometry.setIndex(null));
       return;
     }
     const bitmap = await createImageBitmap(new Blob([parts[0]], { type: "image/jpeg" }));
     this.draw2d(bitmap, header);
-    this.update3d(new Float32Array(parts[1]), header.persons.length);
+    this.update3d(new Float32Array(parts[1]), header.persons);
     const now = performance.now();
     const fps = 1000 / (now - this.lastFrame);
     this.lastFrame = now;
@@ -241,8 +278,24 @@ class LiveView {
     this.controls.addEventListener("change", () => this.render3d());
   }
 
-  update3d(verts, count) {
+  updateCharacters(persons) {
+    try {
+      while (this.characters.length < persons.length) {
+        const character = new this.characterSource.Character(this.characterSource, this.boneTable);
+        this.scene.add(character.root);
+        this.characters.push(character);
+      }
+    } catch (e) {
+      this.characterSource = null;
+      this.status.textContent = `${this.settings.character}: ${e.message}`;
+      return;
+    }
+    persons.forEach((p, i) => this.characters[i].apply(p));
+  }
+
+  update3d(verts, persons) {
     const THREE = this.THREE;
+    const count = persons.length;
     const n = 18439 * 3;
     while (this.meshes.length < count) {
       const geometry = new THREE.BufferGeometry();
@@ -252,9 +305,12 @@ class LiveView {
       this.scene.add(mesh);
       this.meshes.push(mesh);
     }
+    const character = this.characterSource && this.boneTable;
+    if (character) this.updateCharacters(persons);
+    this.characters.forEach((c, i) => (c.root.visible = character && i < count));
     this.meshes.forEach((mesh, i) => {
-      mesh.visible = i < count;
-      if (!mesh.visible) return;
+      mesh.visible = !character && i < count;
+      if (i >= count) return;
       if (!mesh.geometry.index && this.faces) mesh.geometry.setIndex(new THREE.BufferAttribute(this.faces, 1));
       const pos = mesh.geometry.attributes.position.array;
       for (let j = 0; j < n; j += 3) {

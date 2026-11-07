@@ -60,11 +60,11 @@
     "Node name for S&R": "LoadImage"
    },
    "widgets_values": [
-    "tennis_team.jpg",
+    "example.png",
     "image"
    ],
    "widgets_values_named": {
-    "image": "tennis_team.jpg",
+    "image": "example.png",
     "upload": "image"
    }
   },

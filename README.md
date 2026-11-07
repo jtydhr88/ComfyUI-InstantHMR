@@ -4,7 +4,7 @@ English | [中文](README.zh-CN.md)
 
 [InstantHMR](https://github.com/Naturalpad-studio/InstantHMR) recovers the 3D body of every person in an image or video: pose, body shape, 70 keypoints in 2D and 3D, and the full [MHR](https://github.com/facebookresearch/MHR) body mesh. It is a small, fast model (20-32 M parameters) that outputs the same MHR body as ComfyUI's SAM 3D Body, so its result plugs into the native SAM 3D Body nodes for smoothing, rendering and 3D export.
 
-![InstantHMR on a group photo](docs/render_tennis.jpg)
+![InstantHMR on four dancers](docs/render_friends.jpg)
 
 ## Nodes
 
@@ -84,4 +84,4 @@ python custom_nodes/ComfyUI-InstantHMR/scripts/convert_onnx.py instanthmr-medium
 
 ## Credits
 
-InstantHMR by Mohamed Adjel, Kahina Chalabi and Vincent Bonnet ([paper](https://hal.science/hal-05854387)), Apache-2.0 code. The body model is Meta's [MHR](https://github.com/facebookresearch/MHR) (Apache-2.0).
+InstantHMR by Mohamed Adjel, Kahina Chalabi and Vincent Bonnet ([paper](https://hal.science/hal-05854387)), Apache-2.0 code. The body model is Meta's [MHR](https://github.com/facebookresearch/MHR) (Apache-2.0). Demo footage from [Mixkit](https://mixkit.co/).

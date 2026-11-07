@@ -4,7 +4,7 @@
 
 [InstantHMR](https://github.com/Naturalpad-studio/InstantHMR) 从图片或视频中恢复每个人的 3D 身体：姿态、体型、70 个 2D/3D 关键点，以及完整的 [MHR](https://github.com/facebookresearch/MHR) 人体网格。模型小而快（2000 万到 3200 万参数），输出和 ComfyUI 内置 SAM 3D Body 相同的 MHR 人体，所以结果可以直接接 SAM 3D Body 的原生节点做平滑、渲染和 3D 导出。
 
-![InstantHMR 处理合影](docs/render_tennis.jpg)
+![InstantHMR 处理四人舞蹈画面](docs/render_friends.jpg)
 
 ## 节点
 
@@ -84,4 +84,4 @@ python custom_nodes/ComfyUI-InstantHMR/scripts/convert_onnx.py instanthmr-medium
 
 ## 致谢
 
-InstantHMR 作者 Mohamed Adjel、Kahina Chalabi、Vincent Bonnet（[论文](https://hal.science/hal-05854387)），代码 Apache-2.0。人体模型是 Meta 的 [MHR](https://github.com/facebookresearch/MHR)（Apache-2.0）。
+InstantHMR 作者 Mohamed Adjel、Kahina Chalabi、Vincent Bonnet（[论文](https://hal.science/hal-05854387)），代码 Apache-2.0。人体模型是 Meta 的 [MHR](https://github.com/facebookresearch/MHR)（Apache-2.0）。演示素材来自 [Mixkit](https://mixkit.co/)。

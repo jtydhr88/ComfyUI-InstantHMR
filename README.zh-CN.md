@@ -36,7 +36,7 @@
 - `detect_every`（高级输入）：每 N 帧运行一次检测器，中间几帧沿用上次的人物框；检测器是最慢的一步，设 2–3 预览更流畅。`fov`（高级输入）和预测节点的 `fov` 含义相同。
 - `character` 列出 `input` 文件夹（例如 `input/3d/`）里带骨骼的角色（`.fbx`、`.glb`、`.gltf`、`.vrm`）。选中后 3D 视图用它代替 MHR 人体，每个人一份。Mixamo、Unreal 等骨架按骨骼名匹配，VRM 按其人形骨骼表匹配。T-pose 和 A-pose 角色都可以用，角色会按表演者的腿长缩放。
 - `vmc`：填入接收 [VMC 协议](https://protocol.vmc.info/) 的软件地址 `host:port`（VSeeFace、Warudo、VNyan、Blender 的 [VMC Link](https://extensions.blender.org/add-ons/vmc-link/)、Unity 的 VMC4U），把第一个人的动作作为人形角色姿态实时发过去，例如 `127.0.0.1:39539`。数据由 ComfyUI 发出，所以地址按运行 ComfyUI 的电脑来填。清空即停止。
-  - 在 Blender 中：安装 VMC Link，导入 T-pose 角色（例如 Mixamo FBX），应用旋转和缩放（物体 > 应用 > 全部变换），在 VMC Link 面板里选中骨架，按 Start Receiver。在同一面板按 Start Recording 可以把动作录成骨架的关键帧。
+  - 在 Blender 中：安装 VMC Link，导入 T-pose 角色（例如 Mixamo FBX），应用旋转和缩放（物体 > 应用 > 全部变换），在 VMC Link 面板里选中骨架，按 Start Receiver。在同一面板按 Start Recording 可以把动作录成骨架的关键帧。Mixamo 骨架需要在 VMC Link 的手动骨骼映射（Advanced）里设置：UpperLeg → UpLeg、LowerLeg → Leg、Toes → ToeBase、Chest → Spine1、UpperChest → Spine2，手指对应 HandThumb1–3、HandIndex1–3 等（Little → HandPinky）。
 
 浏览器只在 `localhost` 或 HTTPS 下允许打开摄像头。手机使用时，用证书启动 ComfyUI，例如自签名证书：
 

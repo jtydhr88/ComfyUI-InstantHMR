@@ -1,4 +1,5 @@
 import math
+import os
 
 import numpy as np
 import torch
@@ -9,7 +10,7 @@ import comfy.model_patcher
 import comfy.ops
 import comfy.utils
 import folder_paths
-from comfy_api.latest import io
+from comfy_api.latest import InputImpl, io
 from comfy_extras.nodes_sam3d_body import _per_frame_bboxes_from_detections
 from comfy_extras.sam3d_body.utils import compute_canonical_colors, compute_hand_vert_mask, inputs_from_sam3_track
 
@@ -22,6 +23,7 @@ MHRPoseData = io.Custom("MHR_POSE_DATA")
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 CROP_EXPAND = 1.2
+RECORD_DIR = "instanthmr_live"
 # Focal when the camera is unknown, as a multiple of the image diagonal (InstantHMR's training default).
 FOCAL_DIAG = 1.05
 
@@ -162,3 +164,34 @@ class InstantHMRPredict(io.ComfyNode):
             "canonical_colors": compute_canonical_colors(model),
             "hand_vert_mask": compute_hand_vert_mask(model),
         })
+
+
+def recording_files():
+    root = os.path.join(folder_paths.get_input_directory(), RECORD_DIR)
+    if not os.path.isdir(root):
+        return []
+    return sorted((f"{RECORD_DIR}/{f}" for f in os.listdir(root) if f.endswith(".mp4")), reverse=True)
+
+
+class InstantHMRLiveCapture(io.ComfyNode):
+    """Live preview from this device's camera or a phone on the LAN; the recorded clip is the output."""
+
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="InstantHMRLiveCapture",
+            display_name="InstantHMR Live Capture",
+            category="image/detection",
+            inputs=[io.Combo.Input("recording", options=recording_files(), tooltip="A clip recorded with the live view")],
+            outputs=[io.Video.Output()],
+        )
+
+    @classmethod
+    def execute(cls, recording) -> io.NodeOutput:
+        return io.NodeOutput(InputImpl.VideoFromFile(folder_paths.get_annotated_filepath(recording)))
+
+    @classmethod
+    def validate_inputs(cls, recording):
+        if recording not in recording_files():
+            return f"Recording not found: {recording}"
+        return True

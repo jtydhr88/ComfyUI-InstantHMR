@@ -12,6 +12,7 @@ English | [中文](README.zh-CN.md)
 | --- | --- |
 | `Load InstantHMR Model` | loads an InstantHMR checkpoint from `models/detection` |
 | `Run InstantHMR Prediction` | predicts one MHR body per person box and outputs `MHR_POSE_DATA` |
+| `InstantHMR Live Capture` | live 2D and 3D preview from a camera, with recording; outputs the recorded clip as `VIDEO` |
 
 `Run InstantHMR Prediction` takes person boxes from `RT-DETR Detect` (class `person`) or tracks from `SAM3 Video Track`; with neither, the whole frame is one person. `fov` is the vertical field of view in degrees; connect `MoGe` through `MoGe Geometry To FOV` for the camera of a video, or leave it at 0 for a focal of 1.05x the image diagonal.
 
@@ -22,6 +23,26 @@ The output works with the native nodes:
 - `Create 3D Animation File`: animated GLB in the `openpose` and `scail` styles. The `body_mesh` and `bones_only` styles and BVH read the MHR rig from a `sam3d_body_model` input, so connect a SAM 3D Body loader for those.
 
 ![Example workflow](docs/workflow_image.jpg)
+
+## Live capture
+
+![Live capture](docs/live_capture.jpg)
+
+`InstantHMR Live Capture` runs RT-DETR and InstantHMR on a camera feed while you watch: the camera image with the 2D skeletons on the left, the 3D bodies on the right (drag to orbit). Pick the InstantHMR model, the RT-DETR detector and the camera in the node, then press `Start`.
+
+- **This device** uses the webcam of the browser showing ComfyUI.
+- **Phone / other device** shows a QR code. Scan it with a phone on the same network; the phone page streams its camera and shows the skeletons, while the node shows the 3D view.
+- `● Rec` records the incoming frames to `input/instanthmr_live/`. The new clip is selected in the `recording` list, and running the workflow outputs it as `VIDEO`, ready for `Get Video Components` → `Run InstantHMR Prediction` and the rest of the pipeline (`example_workflows/instanthmr_live.json`).
+- `Detect every` runs the detector every N frames and reuses its boxes in between; the detector is the slowest step, so 2-3 keeps the preview smooth. `FoV` works like the prediction node's `fov`.
+
+Browsers open a camera only on `localhost` or over HTTPS. For a phone, start ComfyUI with a certificate, for example a self-signed one:
+
+```
+openssl req -x509 -newkey rsa:2048 -nodes -days 825 -keyout key.pem -out cert.pem -subj "/CN=ComfyUI" -addext "subjectAltName=IP:192.168.0.10"
+python main.py --listen 0.0.0.0 --tls-keyfile key.pem --tls-certfile cert.pem
+```
+
+Put your computer's LAN address in `subjectAltName`, open ComfyUI at `https://<address>:8188`, and accept the certificate warning once on the computer and once on the phone.
 
 ## Models
 
@@ -50,6 +71,7 @@ python custom_nodes/ComfyUI-InstantHMR/scripts/convert_onnx.py instanthmr-medium
 
 - `example_workflows/instanthmr_image.json`: RT-DETR boxes on a photo, rendered as meshes over the image.
 - `example_workflows/instanthmr_video.json`: the SAM 3D Body video template with InstantHMR: SAM3 tracks, MoGe FoV, smoothing, a rendered video and a SCAIL GLB.
+- `example_workflows/instanthmr_live.json`: the same pipeline on a clip recorded with `InstantHMR Live Capture`.
 
 ## Tips
 

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>InstantHMR Camera</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 15px system-ui, sans-serif; }
+  #stage { position: relative; height: calc(100% - 64px); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  video, canvas { position: absolute; max-width: 100%; max-height: 100%; }
+  #bar { height: 64px; display: flex; gap: 8px; align-items: center; justify-content: center; padding: 0 12px; box-sizing: border-box; }
+  button { font: inherit; padding: 10px 16px; border-radius: 8px; border: 0; background: #2563eb; color: #fff; }
+  button.secondary { background: #333; }
+  #status { position: absolute; top: 8px; left: 8px; right: 8px; font-size: 13px; text-shadow: 0 1px 2px #000; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="video" playsinline muted></video>
+  <canvas id="overlay"></canvas>
+  <div id="status">Room <span id="room"></span></div>
+</div>
+<div id="bar">
+  <button id="start">Start camera</button>
+  <button id="flip" class="secondary">Switch camera</button>
+</div>
+<script type="module">
+import { CameraStreamer, drawPersons } from "/instanthmr/static/camera_client.js";
+
+const room = new URLSearchParams(location.search).get("room") || "";
+const video = document.getElementById("video");
+const overlay = document.getElementById("overlay");
+const status = document.getElementById("status");
+const start = document.getElementById("start");
+document.getElementById("room").textContent = room;
+let facing = "environment";
+let streamer = null;
+let last = performance.now();
+
+function onResult(r) {
+  const now = performance.now();
+  const fps = 1000 / (now - last);
+  last = now;
+  const rect = video.getBoundingClientRect();
+  overlay.width = rect.width;
+  overlay.height = rect.height;
+  const ctx = overlay.getContext("2d");
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  if (r.error) {
+    status.textContent = r.error;
+    return;
+  }
+  drawPersons(ctx, r.persons, rect.width / r.w);
+  status.textContent = `Room ${room} · ${fps.toFixed(1)} fps · ${r.persons.length} people${r.recorded ? ` · REC ${r.recorded}` : ""}`;
+}
+
+async function run() {
+  streamer?.stop();
+  streamer = new CameraStreamer(room, video, onResult);
+  try {
+    await streamer.start(facing);
+    start.textContent = "Stop";
+  } catch (e) {
+    status.textContent = e.message;
+    streamer = null;
+  }
+}
+
+start.onclick = () => {
+  if (streamer) {
+    streamer.stop();
+    streamer = null;
+    start.textContent = "Start camera";
+  } else {
+    run();
+  }
+};
+document.getElementById("flip").onclick = () => {
+  facing = facing === "environment" ? "user" : "environment";
+  if (streamer) run();
+};
+</script>
+</body>
+</html>

@@ -29,6 +29,9 @@ LIVE_CAMERAS = ["Phone / other device", "This device"]
 MHR_BODY = "MHR body"
 # Focal when the camera is unknown, as a multiple of the image diagonal (InstantHMR's training default).
 FOCAL_DIAG = 1.05
+# Median share of a track's body keypoints inside its own SAM3 mask below which the track is a stray limb or blob, not a person.
+STRAY_TRACK_FRACTION = 0.6
+BODY_KEYPOINTS = 21
 
 
 class InstantHMRLoader(io.ComfyNode):
@@ -100,6 +103,19 @@ def drop_absent_tracks(boxes, masks):
                 boxes[f][k] = boxes[int(seen[(seen - f).abs().argmin()])][k]
         boxes[f], masks[f] = boxes[f][:count], masks[f][:count]
     return boxes, masks
+
+
+def drop_stray_tracks(frames):
+    hits = {}
+    for persons in frames:
+        for k, p in enumerate(persons):
+            mask = p["mask"][..., 0].numpy()
+            xy = np.round(p["pred_keypoints_2d"][:BODY_KEYPOINTS]).astype(int)
+            on = (xy[:, 0] >= 0) & (xy[:, 0] < mask.shape[1]) & (xy[:, 1] >= 0) & (xy[:, 1] < mask.shape[0])
+            if on.any():
+                hits.setdefault(k, []).append(float(mask[xy[on, 1], xy[on, 0]].mean()))
+    stray = {k for k, v in hits.items() if np.median(v) < STRAY_TRACK_FRACTION}
+    return [[p for k, p in enumerate(persons) if k not in stray] for persons in frames]
 
 
 class InstantHMRPredict(io.ComfyNode):
@@ -181,6 +197,8 @@ class InstantHMRPredict(io.ComfyNode):
                 })
             pbar.update(len(chunk))
 
+        if per_frame_masks is not None:
+            frames_out = drop_stray_tracks(frames_out)
         return io.NodeOutput({
             "frames": frames_out,
             "faces": model.head_pose.faces_np(),

@@ -6,11 +6,11 @@ const STYLE = `
 .ihmr-live { display: flex; flex-direction: column; gap: 6px; height: 100%; min-height: 0; font-size: 12px; color: var(--input-text, #ddd); }
 .ihmr-views { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .ihmr-view { position: relative; min-height: 0; background: #0b0b0b; border-radius: 6px; overflow: hidden; }
-.ihmr-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ihmr-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; outline: none; }
 .ihmr-remote { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 8px; pointer-events: none; }
 .ihmr-remote img { width: 140px; image-rendering: pixelated; background: #fff; padding: 6px; border-radius: 6px; pointer-events: auto; }
 .ihmr-remote a { color: #93c5fd; word-break: break-all; pointer-events: auto; }
-.ihmr-status { opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ihmr-status { opacity: 0.8; white-space: pre; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
 `;
 
 const CAMERAS = { "Phone / other device": "remote", "This device": "local" };
@@ -41,7 +41,7 @@ class LiveView {
     // The settings are the node's own inputs; react when they change.
     const onChange = { camera: () => this.stop(), character: () => this.loadCharacter() };
     this.widgets = {};
-    for (const name of ["model", "detector", "camera", "character", "vmc", "fov", "detect_every"]) {
+    for (const name of ["model", "detector", "camera", "character", "vmc", "fov", "detect_every", "smoothing"]) {
       const w = (this.widgets[name] = node.widgets.find((w) => w.name === name));
       const callback = w.callback;
       w.callback = (...args) => {
@@ -63,6 +63,12 @@ class LiveView {
     this.video = el("video", { muted: true, playsInline: true });
     this.view2d = el("canvas");
     this.canvas3d = el("canvas");
+    // Once clicked, the canvas has focus and keeps the wheel for zooming the 3D view.
+    this.canvas3d.tabIndex = -1;
+    this.canvas3d.addEventListener("pointerdown", () => this.canvas3d.focus());
+    // Right drag pans the 3D view, so it must not open the node's menu.
+    this.canvas3d.addEventListener("contextmenu", (e) => e.stopPropagation());
+    this.canvas3d.dataset.captureWheel = "true";
     this.remote = el("div", { className: "ihmr-remote" });
     this.root = el("div", { className: "ihmr-live" }, [
       el("div", { className: "ihmr-views" }, [
@@ -82,15 +88,15 @@ class LiveView {
     const w = this.widgets;
     return {
       model: w.model.value, detector: w.detector.value, camera: CAMERAS[w.camera.value] ?? "remote",
-      fov: Number(w.fov.value) || 0, detect_every: Math.max(1, Math.round(Number(w.detect_every.value) || 1)),
+      fov: Number(w.fov.value) || 0, detect_every: Math.max(1, Math.round(Number(w.detect_every.value) || 1)), smoothing: Number(w.smoothing.value) || 0,
       character: w.character.value === MHR_BODY ? "" : w.character.value, vmc: String(w.vmc.value ?? "").trim(),
     };
   }
 
   sendSettings() {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      const { model, detector, fov, detect_every, vmc } = this.settings;
-      this.ws.send(JSON.stringify({ type: "settings", model, detector, fov, detect_every, vmc }));
+      const { model, detector, fov, detect_every, smoothing, vmc } = this.settings;
+      this.ws.send(JSON.stringify({ type: "settings", model, detector, fov, detect_every, smoothing, vmc }));
     }
   }
 
@@ -125,7 +131,10 @@ class LiveView {
     ws.onclose = () => this.ws === ws && this.stop();
     this.startBtn.label = "Stop";
     this.framed = false;
-    this.lastFrame = performance.now();
+    this.stats = { t: performance.now(), frames: 0, det: 0, hmr: 0 };
+    // A webcam faces the user, so both views show a mirror image; a phone starts on its back camera.
+    this.mirror = this.settings.camera === "local";
+    this.world.scale.x = this.mirror ? -1 : 1;
     if (this.settings.camera === "local") {
       this.remote.replaceChildren();
       this.camera = new CameraStreamer(room, this.video, () => {});
@@ -202,13 +211,18 @@ class LiveView {
     const bitmap = await createImageBitmap(new Blob([parts[0]], { type: "image/jpeg" }));
     this.draw2d(bitmap, header);
     this.update3d(new Float32Array(parts[1]), header.persons);
+    if (header.error) return;
+    // Averages over half a second: per-frame numbers jump, and the detector only runs on some frames.
+    const s = this.stats;
+    s.frames++;
+    s.det += header.det_ms;
+    s.hmr += header.hmr_ms;
     const now = performance.now();
-    const fps = 1000 / (now - this.lastFrame);
-    this.lastFrame = now;
-    if (!header.error) {
-      this.status.textContent = `${fps.toFixed(1)} fps · detector ${header.det_ms.toFixed(0)} ms · InstantHMR ${header.hmr_ms.toFixed(0)} ms · ${header.persons.length === 1 ? "1 person" : `${header.persons.length} people`}`
-        + (header.recorded ? ` · REC ${header.recorded} frames` : this.saved ? ` · ${this.saved}` : "");
-    }
+    if (now - s.t < 500) return;
+    const ms = (v) => (v / s.frames).toFixed(0).padStart(3);
+    this.status.textContent = `${(s.frames * 1000 / (now - s.t)).toFixed(1).padStart(4)} fps · detector ${ms(s.det)} ms · InstantHMR ${ms(s.hmr)} ms · ${header.persons.length === 1 ? "1 person" : `${header.persons.length} people`}`
+      + (header.recorded ? ` · REC ${header.recorded} frames` : this.saved ? ` · ${this.saved}` : "");
+    this.stats = { t: now, frames: 0, det: 0, hmr: 0 };
   }
 
   draw2d(bitmap, header) {
@@ -221,6 +235,10 @@ class LiveView {
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.save();
     ctx.translate((c.width - bitmap.width * scale) / 2, (c.height - bitmap.height * scale) / 2);
+    if (this.mirror) {
+      ctx.translate(bitmap.width * scale, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(bitmap, 0, 0, bitmap.width * scale, bitmap.height * scale);
     drawPersons(ctx, header.persons, scale);
     ctx.restore();
@@ -239,11 +257,21 @@ class LiveView {
     const sun = new THREE.DirectionalLight(0xffffff, 1.5);
     sun.position.set(1, 2, 3);
     this.scene.add(sun);
-    // Camera space of the input: the capturing camera sits at the origin and looks down -Z.
-    this.scene.add(new THREE.AxesHelper(0.3));
+    // Camera space of the input: the capturing camera sits at the origin and looks down -Z. Mirroring flips its X.
+    this.world = new THREE.Group();
+    this.scene.add(this.world);
     this.camera3d = new THREE.PerspectiveCamera(45, 1, 0.05, 100);
     this.camera3d.position.set(2.5, 1.5, 1.5);
     this.controls = new OrbitControls(this.camera3d, this.canvas3d);
+    // OrbitControls follows a drag on the document, but the node stops pointer events from leaving it.
+    // The canvas captures the pointer on press, so take the drag where it arrives.
+    for (const [type, handler] of [["pointermove", "_onPointerMove"], ["pointerup", "_onPointerUp"]]) {
+      this.canvas3d.addEventListener(type, (e) => {
+        if (!this.controls._pointers.length) return;
+        e.stopPropagation();
+        this.controls[handler](e);
+      });
+    }
     this.controls.target.set(0, -0.5, -4);
     this.controls.update();
     this.material = new THREE.MeshStandardMaterial({ color: 0xd8c3a5, roughness: 0.7 });
@@ -256,7 +284,7 @@ class LiveView {
     try {
       while (this.characters.length < persons.length) {
         const character = new this.characterSource.Character(this.characterSource, this.boneTable);
-        this.scene.add(character.root);
+        this.world.add(character.root);
         this.characters.push(character);
       }
     } catch (e) {
@@ -276,7 +304,7 @@ class LiveView {
       geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n), 3));
       const mesh = new THREE.Mesh(geometry, this.material);
       mesh.frustumCulled = false;
-      this.scene.add(mesh);
+      this.world.add(mesh);
       this.meshes.push(mesh);
     }
     const character = this.characterSource && this.boneTable;
@@ -295,13 +323,23 @@ class LiveView {
       mesh.geometry.attributes.position.needsUpdate = true;
       mesh.geometry.computeVertexNormals();
     });
-    if (count && !this.framed) {
-      // Frame the first person once, from slightly off the capturing camera's axis.
-      this.framed = true;
-      this.meshes[0].geometry.computeBoundingSphere();
-      const { center, radius } = this.meshes[0].geometry.boundingSphere;
-      this.controls.target.copy(center);
-      this.camera3d.position.set(center.x + radius * 1.2, center.y + radius * 0.4, center.z + radius * 3);
+    if (count) {
+      const hips = new THREE.Vector3(...persons[0].hips).multiply(this.world.scale);
+      if (!this.framed) {
+        // Frame the first person once, from slightly off the capturing camera's axis.
+        this.framed = true;
+        this.meshes[0].geometry.computeBoundingSphere();
+        const { radius } = this.meshes[0].geometry.boundingSphere;
+        const center = this.meshes[0].geometry.boundingSphere.center.clone().multiply(this.world.scale);
+        this.controls.target.copy(center);
+        this.camera3d.position.set(center.x + radius * 1.2, center.y + radius * 0.4, center.z + radius * 3);
+      } else {
+        // Then follow the hips, keeping the orbit the user dragged to.
+        const move = hips.clone().sub(this.hips);
+        this.controls.target.add(move);
+        this.camera3d.position.add(move);
+      }
+      this.hips = hips;
       this.controls.update();
     }
     this.render3d();

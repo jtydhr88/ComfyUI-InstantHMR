@@ -28,6 +28,7 @@ from .nodes import FOCAL_DIAG, RECORD_DIR, InstantHMRLoader, crop_batch, recordi
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 MAX_PERSONS = 4
 PERSON = COCO_CLASSES.index("person")
+TAU = 2 * math.pi
 
 # One worker so live rooms take turns on the GPU instead of racing each other's model loads.
 GPU = ThreadPoolExecutor(max_workers=1, thread_name_prefix="instanthmr-live")
@@ -39,13 +40,51 @@ def pack(header, *buffers):
     return struct.pack("<I", len(head)) + head + b"".join(buffers)
 
 
+def alpha(cutoff, dt):
+    return 1 / (1 + 1 / (TAU * cutoff * dt))
+
+
+class OneEuro:
+    """Causal One Euro filter: smooths hard while a value holds still and follows fast motion with little lag."""
+
+    def __init__(self, beta, wrap=False):
+        self.beta, self.wrap = beta, wrap
+        self.x = self.dx = None
+
+    def __call__(self, x, dt, min_cutoff):
+        if self.x is None:
+            self.x, self.dx = x, torch.zeros_like(x)
+            return x
+        d = x - self.x
+        if self.wrap:
+            d = torch.remainder(d + math.pi, TAU) - math.pi
+        self.dx = self.dx + alpha(1.0, dt) * (d / dt - self.dx)
+        self.x = self.x + alpha(min_cutoff + self.beta * self.dx.abs(), dt) * d
+        return self.x
+
+
+class Track:
+    """Filter state of one person, followed across frames by its box center."""
+
+    def __init__(self):
+        self.center = None
+        # Betas per unit: radians for the pose and the camera translation, pixels for the 2D keypoints.
+        self.pose = OneEuro(2.0, wrap=True)
+        self.hand = OneEuro(2.0)
+        self.body = OneEuro(0.0)
+        self.cam = OneEuro(2.0)
+        self.kp2d = OneEuro(0.02)
+
+
 class Room:
     def __init__(self):
         self.viewers = set()
         self.cameras = set()
         self.sending = set()
-        self.settings = {"model": None, "detector": None, "fov": 0.0, "detect_every": 2, "vmc": ""}
+        self.settings = {"model": None, "detector": None, "fov": 0.0, "detect_every": 2, "smoothing": 0.5, "vmc": ""}
         self.boxes = torch.zeros(0, 4)
+        self.tracks = []
+        self.last = None
         self.frame_index = 0
         self.recording = None
         self.vmc = None
@@ -66,8 +105,44 @@ class Room:
                 models[key] = comfy.sd.load_diffusion_model(folder_paths.get_full_path_or_raise("diffusion_models", name))
         return models[key]
 
+    def smooth(self, params, cam_t, kp2d, now):
+        """Filters each person's pose parameters, camera translation and 2D keypoints before the body is decoded."""
+        strength = float(self.settings["smoothing"])
+        dt = now - (self.last or 0)
+        self.last = now
+        if strength <= 0:
+            self.tracks = []
+            return params, cam_t, kp2d
+        if not 0 < dt < 0.5:
+            self.tracks = []
+        min_cutoff = 0.25 * 16 ** (1 - strength)
+        free, self.tracks = self.tracks, []
+        for x1, y1, x2, y2 in self.boxes.tolist():
+            center = ((x1 + x2) / 2, (y1 + y2) / 2)
+            track = min(free, key=lambda t: math.dist(center, t.center), default=None)
+            if track and math.dist(center, track.center) < max(x2 - x1, y2 - y1) / 2:
+                free.remove(track)
+            else:
+                track = Track()
+            track.center = center
+            self.tracks.append(track)
+
+        global_rot, body_pose, shape, scale, hand = params
+        pose, body = torch.cat([global_rot, body_pose], 1), torch.cat([shape, scale], 1)
+        # The translation is filtered as view direction and log depth, so depth noise counts relative to the distance.
+        z = cam_t[:, 2:].clamp(min=1e-3)
+        view = torch.cat([cam_t[:, :2] / z, z.log()], 1)
+        rows = [[t.pose(pose[i], dt, min_cutoff), t.body(body[i], dt, min_cutoff / 4), t.hand(hand[i], dt, min_cutoff),
+                 t.cam(view[i], dt, min_cutoff), t.kp2d(kp2d[i], dt, min_cutoff)] for i, t in enumerate(self.tracks)]
+        pose, body, hand, view, kp2d = [torch.stack(c) for c in zip(*rows)]
+        global_rot, body_pose = pose.split([global_rot.shape[1], body_pose.shape[1]], 1)
+        shape, scale = body.split([shape.shape[1], scale.shape[1]], 1)
+        z = view[:, 2:].exp()
+        return (global_rot, body_pose, shape, scale, hand), torch.cat([view[:, :2] * z, z], 1), kp2d
+
     def infer(self, jpeg):
         s = self.settings
+        now = time.monotonic()
         with torch.inference_mode():
             hmr, detector = self.model("hmr", s["model"]), self.model("detector", s["detector"])
             # Loading re-stages the weights, which costs more than a frame; only reload after a workflow evicted them.
@@ -93,9 +168,10 @@ class Room:
                 fov = float(s["fov"])
                 focal = H / (2 * math.tan(math.radians(fov) / 2)) if fov > 0 else FOCAL_DIAG * math.hypot(H, W)
                 crops, cliff, squares = crop_batch(image, self.boxes.to(device), focal, model.image_size)
-                out = model(crops.to(model.dtype), cliff.to(model.dtype))
-                kp2d = (out["pred_keypoints_2d_crop"] + 1) * 0.5 * squares[:, None, 2:] + squares[:, None, :2]
-                cam_t = out["pred_cam_t"]
+                params, cam_t, kp2d = model.predict(crops.to(model.dtype), cliff.to(model.dtype))
+                kp2d = (kp2d + 1) * 0.5 * squares[:, None, 2:] + squares[:, None, :2]
+                params, cam_t, kp2d = self.smooth(params, cam_t, kp2d, now)
+                out = model.head_pose.decode(*params)
                 verts = (out["pred_vertices"] + cam_t[:, None]).float().cpu().numpy().tobytes()
                 kp2d, cam_t = kp2d.float().cpu().numpy(), cam_t.cpu().numpy()
                 # Joint coords are in the camera frame (Y down); the bone rotations and the viewer use the MHR frame (Y up).

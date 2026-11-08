@@ -248,6 +248,8 @@ class InstantHMRLiveCapture(io.ComfyNode):
                                tooltip="Vertical field of view in degrees; 0 uses a focal of 1.05x the image diagonal"),
                 io.Int.Input("detect_every", default=2, min=1, max=10, advanced=True,
                              tooltip="Run the detector every N frames and reuse its boxes in between"),
+                io.Float.Input("smoothing", default=0.5, min=0.0, max=1.0, step=0.05,
+                               tooltip="Steadies the body while you hold still and lets fast moves through; higher is steadier, 0 = raw"),
             ],
             outputs=[io.Video.Output()],
         )

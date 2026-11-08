@@ -179,7 +179,8 @@ class InstantHMRHead(MHRHead):
         self.flex_bounds = nn.Parameter(torch.empty(2, 6, device=device), requires_grad=False)
         self.scale_bounds = nn.Parameter(torch.empty(2, self.num_scale_comps, device=device), requires_grad=False)
 
-    def forward(self, x):
+    def params(self, x):
+        """(global_rot, body_pose, shape, scale, hand) that decode() turns into the posed MHR body."""
         pred = self.proj(x).float() + self.init_estimate
         B = pred.shape[0]
         root, body, shape, scale, hand = pred.split([6, self.body_cont_dim, self.num_shape_comps, self.num_scale_comps, self.num_hand_comps * 2], dim=1)
@@ -188,7 +189,10 @@ class InstantHMRHead(MHRHead):
         body_pose = compact_cont_to_model_params_body(body)
         body_pose[:, 124:130] = self.flex_bounds[0] + self.flex_bounds[1] * (body_pose[:, 124:130].tanh() + 1)
         scale = self.scale_bounds[0] + self.scale_bounds[1] * (scale.tanh() + 1)
-        face = pred.new_zeros(B, self.num_face_comps)
+        return global_rot, body_pose, shape, scale, hand
+
+    def decode(self, global_rot, body_pose, shape, scale, hand):
+        face = global_rot.new_zeros(global_rot.shape[0], self.num_face_comps)
 
         verts, j3d, jcoords, model_params, joint_rots = self.mhr_forward(
             global_trans=torch.zeros_like(global_rot), global_rot=global_rot, body_pose_params=body_pose,
@@ -236,17 +240,19 @@ class InstantHMR(nn.Module):
 
     def forward(self, image, cliff_cond):
         """image (B, 3, 288, 288) ImageNet-normalised crop, cliff_cond (B, 3) box position in the frame."""
+        params, cam_t, kp2d = self.predict(image, cliff_cond)
+        return {**self.head_pose.decode(*params), "pred_cam_t": cam_t, "pred_keypoints_2d_crop": kp2d}
+
+    def predict(self, image, cliff_cond):
+        """The pose parameters, camera translation and crop 2D keypoints, before the MHR body is decoded."""
         memory = self.feat_proj(self.backbone(image).flatten(2).transpose(1, 2))
         memory = memory + cast_to_input(self.mem_pos_embed, memory)
         x = cast_to_input(self.query_embed, memory) + self.cond_proj(cliff_cond).unsqueeze(1)
         for layer in self.layers:
             x = layer(x, memory)
 
-        out = self.head_pose(x[:, 0])
-        out["pred_cam_t"] = self.head_cam(x[:, 0]).float()
         logits = self.head_2d(x[:, 1:]).float().unflatten(-1, (2, KP2D_BINS))
-        out["pred_keypoints_2d_crop"] = (logits.softmax(-1) * self.kp2d_bin_centers).sum(-1)
-        return out
+        return self.head_pose.params(x[:, 0]), self.head_cam(x[:, 0]).float(), (logits.softmax(-1) * self.kp2d_bin_centers).sum(-1)
 
     def memory_used_forward(self, batch):
         return batch * 64 * 1024 * 1024 * comfy.model_management.dtype_size(self.feat_proj.weight.dtype)

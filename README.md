@@ -81,6 +81,7 @@ python custom_nodes/ComfyUI-InstantHMR/scripts/convert_onnx.py instanthmr-medium
 - InstantHMR is trained on whole people. On close-ups that cut the body at the chest the pose stays good, while the mesh can sit a few percent off the person in the image; full-body shots line up closely.
 - For several people in a video, use SAM3 tracks so each person keeps the same index across frames, which the smoothing node relies on.
 - Smaller models (`nano`, `tiny`) are faster and less accurate; the network takes about 1 ms per person on a desktop GPU, so the detector and tracker set the speed of a workflow.
+- For facial expressions, add `Face Expression to SAM3D Body` after `Run InstantHMR Prediction`, with a model from `Load SAM3D Body Model`. It reads the faces with MediaPipe and drives MHR's expression blendshapes, so the rendered mesh and GLB / BVH export carry the expression. InstantHMR itself predicts body, hands and shape.
 
 ## Credits
 

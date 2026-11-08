@@ -81,6 +81,7 @@ python custom_nodes/ComfyUI-InstantHMR/scripts/convert_onnx.py instanthmr-medium
 - InstantHMR 用完整人体训练。胸部以下被裁掉的近景里姿态依然准确，网格和画面中的人可能错开几个百分点；全身镜头对得很准。
 - 视频里有多个人时，用 SAM3 跟踪，让每个人在各帧保持同一个序号，平滑节点依赖这一点。
 - 小模型（`nano`、`tiny`）更快、精度略低；在桌面 GPU 上网络每人约 1 ms，整个工作流的速度主要取决于检测和跟踪。
+- 想要面部表情，在 `Run InstantHMR Prediction` 后面接 `Face Expression to SAM3D Body`，再给它连一个 `Load SAM3D Body Model` 加载的模型。它用 MediaPipe 识别人脸，驱动 MHR 的表情形变，渲染出的网格和导出的 GLB / BVH 都会带上表情。InstantHMR 本身只预测身体、手和体型。
 
 ## 致谢
 

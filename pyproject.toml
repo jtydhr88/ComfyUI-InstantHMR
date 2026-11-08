@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-instanthmr"
 description = "InstantHMR real-time human mesh recovery for ComfyUI: MHR body pose, shape, keypoints and mesh for every person, on the native SAM 3D Body nodes."
-version = "1.0.0"
+version = "1.1.0"
 license = {text = "Apache-2.0"}
 dependencies = []
 

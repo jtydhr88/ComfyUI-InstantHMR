@@ -83,6 +83,25 @@ def crop_batch(frame, boxes, focal, size):
     return (crops - mean) / std, cliff.float(), torch.stack([sx, sy, side], -1).float()
 
 
+def drop_absent_tracks(boxes, masks):
+    """Leave out track slots whose mask is empty in a frame, which inputs_from_sam3_track boxes as the full frame.
+    Person indices are track ids, so a gap below the last present slot keeps the slot's nearest box."""
+    present = torch.stack([m.flatten(1).any(1) for m in masks])
+    keep = present.any(0)
+    present = present[:, keep]
+    boxes = [b[keep] for b in boxes]
+    masks = [m[keep] for m in masks]
+    frames = torch.arange(len(boxes))
+    for f in range(len(boxes)):
+        count = int(present[f].nonzero().max()) + 1 if present[f].any() else 0
+        for k in range(count):
+            if not present[f, k]:
+                seen = frames[present[:, k]]
+                boxes[f][k] = boxes[int(seen[(seen - f).abs().argmin()])][k]
+        boxes[f], masks[f] = boxes[f][:count], masks[f][:count]
+    return boxes, masks
+
+
 class InstantHMRPredict(io.ComfyNode):
     @classmethod
     def define_schema(cls):
@@ -108,6 +127,8 @@ class InstantHMRPredict(io.ComfyNode):
         per_frame_boxes, per_frame_masks = None, None
         if track_data is not None:
             per_frame_boxes, per_frame_masks = inputs_from_sam3_track(track_data, B, H, W)
+            if per_frame_boxes is not None:
+                per_frame_boxes, per_frame_masks = drop_absent_tracks(per_frame_boxes, per_frame_masks)
         if per_frame_boxes is None and bboxes:
             per_frame_boxes = _per_frame_bboxes_from_detections(bboxes, B)
         if per_frame_boxes is None:
